@@ -659,3 +659,7 @@ async function refresh() {
   await refresh();
   selectDate(selectedDate);
 })();
+
+function openDesktopWidget() {
+  window.location.href = "todocal://open-widget";
+}

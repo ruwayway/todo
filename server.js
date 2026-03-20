@@ -17,8 +17,9 @@ app.use(
     secret: process.env.SESSION_SECRET || "dev-secret-change-this",
     resave: false,
     saveUninitialized: false,
+    rolling: true,
     cookie: {
-      maxAge: 1000 * 60 * 60 * 24 * 7,
+      maxAge: 1000 * 60 * 60 * 24 * 30,
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax"
@@ -165,6 +166,7 @@ app.get("/api/me", (req, res) => {
 
 app.post("/api/logout", (req, res) => {
   req.session.destroy(() => {
+    res.clearCookie("connect.sid");
     res.json({ ok: true });
   });
 });
