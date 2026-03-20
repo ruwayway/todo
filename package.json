@@ -3,10 +3,13 @@
   "version": "1.0.0",
   "description": "업무 캘린더 웹앱 + 바탕화면 위젯",
   "main": "electron/main.js",
+  "author": "ruwayway",
   "scripts": {
     "dev": "node server.js",
+    "start": "node server.js",
     "desktop": "electron .",
-    "all": "concurrently \"node server.js\" \"wait-on http://localhost:3000/login.html && electron .\""
+    "all": "concurrently \"node server.js\" \"wait-on http://localhost:3000/login.html && electron .\"",
+    "pack-win": "electron-packager . \"Todo Calendar Widget\" --platform=win32 --arch=x64 --out=dist --overwrite --prune=true --ignore=\"^/data$\" --ignore=\"^/node_modules$\" --ignore=\"^/dist$\" --ignore=\"^/\\.git$\" --ignore=\"^/server\\.js$\" --ignore=\"^/db\\.js$\" --ignore=\"^/\\.env$\""
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -17,6 +20,7 @@
   "devDependencies": {
     "concurrently": "^9.1.2",
     "electron": "^36.2.0",
+    "electron-packager": "^17.1.2",
     "wait-on": "^8.0.3"
   }
 }

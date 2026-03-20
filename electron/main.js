@@ -4,6 +4,8 @@ const path = require("path");
 let mainWindow;
 let widgetWindow;
 
+const APP_URL = "https://todoriseuteu.onrender.com"; // 네 Render 주소로 바꿔
+
 function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -17,7 +19,7 @@ function createMainWindow() {
     }
   });
 
-  mainWindow.loadURL("http://localhost:3000/login.html");
+  mainWindow.loadURL(`${APP_URL}/login.html`);
 }
 
 function createWidgetWindow() {
@@ -45,7 +47,7 @@ function createWidgetWindow() {
     }
   });
 
-  widgetWindow.loadURL("http://localhost:3000/widget.html");
+  widgetWindow.loadURL(`${APP_URL}/widget.html`);
 
   widgetWindow.on("closed", () => {
     widgetWindow = null;
@@ -70,7 +72,6 @@ function showWidgetWindow() {
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
-
   createMainWindow();
   createWidgetWindow();
 
@@ -83,15 +84,11 @@ app.whenReady().then(() => {
 });
 
 ipcMain.on("widget:minimize", () => {
-  if (widgetWindow && !widgetWindow.isDestroyed()) {
-    widgetWindow.minimize();
-  }
+  if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.minimize();
 });
 
 ipcMain.on("widget:close", () => {
-  if (widgetWindow && !widgetWindow.isDestroyed()) {
-    widgetWindow.close();
-  }
+  if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.close();
 });
 
 ipcMain.on("widget:show", () => {

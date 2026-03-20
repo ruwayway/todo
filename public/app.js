@@ -97,6 +97,17 @@ async function checkSession() {
   return true;
 }
 
+function setupDesktopOnlyButtons() {
+  const hasElectronWidget = !!window.widgetWindowAPI;
+  const openBtn = document.getElementById("btn-open-widget");
+  const hideBtn = document.getElementById("btn-hide-widget");
+
+  if (!hasElectronWidget) {
+    if (openBtn) openBtn.style.display = "none";
+    if (hideBtn) hideBtn.style.display = "none";
+  }
+}
+
 function dotClass(t, ds) {
   if (isDoneOn(t, ds)) return "dot-done";
   if (t.repeat) return "dot-repeat";
@@ -395,7 +406,6 @@ async function saveDetail() {
       }
 
       const data = await res.json();
-      console.log("추가 결과:", data);
       isNewMode = false;
       detailId = data.id ?? null;
     } else {
@@ -595,16 +605,12 @@ async function logout() {
 function openWidget() {
   if (window.widgetWindowAPI?.show) {
     window.widgetWindowAPI.show();
-  } else {
-    alert("Electron 위젯 모드에서만 사용할 수 있어요.");
   }
 }
 
 function hideWidget() {
   if (window.widgetWindowAPI?.hide) {
     window.widgetWindowAPI.hide();
-  } else {
-    alert("Electron 위젯 모드에서만 사용할 수 있어요.");
   }
 }
 
@@ -643,6 +649,7 @@ async function refresh() {
   const ok = await checkSession();
   if (!ok) return;
 
+  setupDesktopOnlyButtons();
   await loadTasks();
 
   if (!selectedDate) {
