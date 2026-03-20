@@ -1,0 +1,22 @@
+{
+  "name": "todo-calendar-pro",
+  "version": "1.0.0",
+  "description": "업무 캘린더 웹앱 + 바탕화면 위젯",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "node server.js",
+    "desktop": "electron .",
+    "all": "concurrently \"node server.js\" \"wait-on http://localhost:3000/login.html && electron .\""
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "^12.2.0",
+    "express": "^5.1.0",
+    "express-session": "^1.18.2"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "electron": "^36.2.0",
+    "wait-on": "^8.0.3"
+  }
+}

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>오늘의 업무 위젯</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="widget-body postit-bg">
+  <div class="sticky-shell">
+    <div class="sticky-dragbar">
+      <div class="sticky-dots">
+        <span></span><span></span><span></span>
+      </div>
+
+      <div class="sticky-actions">
+        <button class="sticky-mini-btn" onclick="loadWidget()" title="새로고침">↻</button>
+        <button class="sticky-mini-btn" onclick="minimizeWidget()" title="최소화">—</button>
+        <button class="sticky-mini-btn close-btn" onclick="closeWidget()" title="닫기">×</button>
+      </div>
+    </div>
+
+    <div class="postit-wrap sticker-mode">
+      <div class="postit-tape postit-tape-left"></div>
+      <div class="postit-tape postit-tape-right"></div>
+      <div class="postit-pin"></div>
+
+      <div class="postit-header">
+        <div>
+          <div class="postit-title">TODAY</div>
+          <div class="postit-date" id="widget-date"></div>
+        </div>
+      </div>
+
+      <div class="postit-summary" id="widget-summary">
+        완료 0 / 전체 0
+      </div>
+
+      <div class="postit-divider"></div>
+
+      <div class="postit-section">
+        <div class="postit-section-title">해야 할 일</div>
+        <div id="widget-pending-list" class="postit-list">
+          <div class="empty-day">메인 창에서 먼저 로그인하세요</div>
+        </div>
+      </div>
+
+      <div class="postit-section">
+        <div class="postit-section-title">완료한 일</div>
+        <div id="widget-done-list" class="postit-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/widget.js"></script>
+</body>
+</html>

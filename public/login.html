@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>로그인</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="auth-body">
+  <div class="auth-box">
+    <h1>업무 캘린더</h1>
+    <p class="auth-sub">회원가입 후 로그인해서 나만의 업무 캘린더를 사용할 수 있어요.</p>
+
+    <input id="username" class="auth-input" type="text" placeholder="아이디" />
+    <input id="password" class="auth-input" type="password" placeholder="비밀번호" />
+
+    <div class="auth-actions">
+      <button id="loginBtn" class="btn-main" type="button">로그인</button>
+      <button id="registerBtn" class="btn-sub" type="button">회원가입</button>
+    </div>
+
+    <p id="auth-msg" class="auth-msg"></p>
+  </div>
+
+  <script src="/login.js"></script>
+</body>
+</html>
