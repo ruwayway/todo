@@ -40,3 +40,7 @@ document.getElementById("loginBtn").addEventListener("click", () => auth("login"
 document.getElementById("registerBtn").addEventListener("click", () => auth("register"));
 
 checkSession();
+
+function openDesktopWidget() {
+  window.location.href = "todocal://open-widget";
+}

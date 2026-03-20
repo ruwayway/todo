@@ -566,37 +566,6 @@ function copyTodayReport() {
   });
 }
 
-function printTodayMemo() {
-  const td = todayStr();
-  const list = getTasksForDate(td);
-  const done = list.filter((t) => isDoneOn(t, td));
-  const pending = list.filter((t) => !isDoneOn(t, td));
-
-  let area = document.getElementById("print-area");
-  if (!area) {
-    area = document.createElement("div");
-    area.id = "print-area";
-    document.body.appendChild(area);
-  }
-
-  area.innerHTML = `
-    <h3 style="margin-bottom:8px;">오늘의 투두</h3>
-    <div style="margin-bottom:8px;">날짜: ${td}</div>
-    <div style="margin-bottom:8px;">완료 ${done.length} / 전체 ${list.length}</div>
-    <hr style="margin:8px 0;">
-    <strong>남은 일</strong>
-    <ul style="padding-left:16px; margin:6px 0 10px;">
-      ${pending.map((t) => `<li style="margin-bottom:4px;">${t.title}</li>`).join("") || "<li>없음</li>"}
-    </ul>
-    <strong>완료한 일</strong>
-    <ul style="padding-left:16px; margin:6px 0;">
-      ${done.map((t) => `<li style="margin-bottom:4px;">${t.title}</li>`).join("") || "<li>없음</li>"}
-    </ul>
-  `;
-
-  window.print();
-}
-
 async function logout() {
   await fetch("/api/logout", { method: "POST" });
   location.href = "/login.html";
@@ -612,6 +581,10 @@ function hideWidget() {
   if (window.widgetWindowAPI?.hide) {
     window.widgetWindowAPI.hide();
   }
+}
+
+function openDesktopWidget() {
+  window.location.href = "todocal://open-widget";
 }
 
 function changeMonth(dir) {
@@ -659,7 +632,3 @@ async function refresh() {
   await refresh();
   selectDate(selectedDate);
 })();
-
-function openDesktopWidget() {
-  window.location.href = "todocal://open-widget";
-}
