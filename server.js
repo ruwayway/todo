@@ -2,8 +2,6 @@ const express = require("express");
 const session = require("express-session");
 const bcrypt = require("bcrypt");
 const path = require("path");
-const { createClient } = require("redis");
-const { RedisStore } = require("connect-redis");
 const db = require("./db");
 
 const app = express();
@@ -13,6 +11,22 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(express.static(path.join(__dirname, "public")));
+
+app.use(
+  session({
+    name: "todo.sid",
+    secret: process.env.SESSION_SECRET || "dev-secret-change-this",
+    resave: false,
+    saveUninitialized: false,
+    rolling: true,
+    cookie: {
+      maxAge: 1000 * 60 * 60 * 24 * 30,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax"
+    }
+  })
+);
 
 function todayStr() {
   return new Date().toISOString().split("T")[0];
@@ -75,39 +89,6 @@ async function buildDateChecks(userId) {
 }
 
 async function startServer() {
-  const redisUrl = process.env.REDIS_URL;
-  if (!redisUrl) {
-    throw new Error("REDIS_URL 환경변수가 없습니다.");
-  }
-
-  const redisClient = createClient({ url: redisUrl });
-  redisClient.on("error", (err) => {
-    console.error("Redis client error:", err);
-  });
-  await redisClient.connect();
-
-  const redisStore = new RedisStore({
-    client: redisClient,
-    prefix: "todo:sess:"
-  });
-
-  app.use(
-    session({
-      store: redisStore,
-      name: "todo.sid",
-      secret: process.env.SESSION_SECRET || "dev-secret-change-this",
-      resave: false,
-      saveUninitialized: false,
-      rolling: true,
-      cookie: {
-        maxAge: 1000 * 60 * 60 * 24 * 30,
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax"
-      }
-    })
-  );
-
   await db.initDb();
 
   /* ---------------- AUTH ---------------- */
