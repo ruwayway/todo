@@ -799,3 +799,37 @@ body{
     align-items:flex-start;
   }
 }
+
+#cal-col{
+  min-width:0;
+}
+
+.calendar-wrap{
+  min-height:640px;
+}
+
+.side-panel{
+  min-width:0;
+}
+
+.detail-panel{
+  min-height:230px;
+}
+
+.report-panel textarea{
+  font-family:inherit;
+}
+
+.top-right .btn-today{
+  white-space:nowrap;
+}
+
+.task-list-scroll{
+  padding-right:2px;
+}
+
+.report-box,
+#urgent-list,
+#day-task-list{
+  scrollbar-width:thin;
+}
