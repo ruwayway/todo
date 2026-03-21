@@ -687,3 +687,83 @@ async function refresh() {
   await refresh();
   selectDate(selectedDate);
 })();
+
+document.getElementById("restore-file-input")?.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  await restoreBackupFile(file);
+});
+
+async function downloadBackup() {
+  try {
+    const res = await fetch("/api/backup");
+
+    if (!res.ok) {
+      alert("백업 실패");
+      return;
+    }
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `todo-backup-${todayStr()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error(error);
+    alert("백업 실패");
+  }
+}
+
+function openRestorePicker() {
+  const input = document.getElementById("restore-file-input");
+  if (input) {
+    input.value = "";
+    input.click();
+  }
+}
+
+async function restoreBackupFile(file) {
+  try {
+    const text = await file.text();
+    const backup = JSON.parse(text);
+
+    const replace = confirm(
+      "기존 데이터를 지우고 백업으로 완전히 덮어쓸까요?\n\n확인 = 전체 덮어쓰기\n취소 = 기존 데이터에 추가 복구"
+    );
+
+    const res = await fetch("/api/restore", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        backup,
+        mode: replace ? "replace" : "merge"
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.message || "복구 실패");
+      return;
+    }
+
+    alert(data.message || "복구 완료");
+
+    await loadTasks();
+    await refresh();
+    if (selectedDate) {
+      renderDayPanel();
+    }
+  } catch (error) {
+    console.error(error);
+    alert("복구 파일을 읽을 수 없습니다.");
+  }
+}

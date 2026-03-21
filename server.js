@@ -437,6 +437,153 @@ async function startServer() {
   });
 }
 
+/* ---------------- BACKUP / RESTORE ---------------- */
+
+app.get("/api/backup", requireLogin, (req, res) => {
+  try {
+    const userId = req.session.user.id;
+
+    const user = db
+      .prepare("SELECT id, username, created_at as createdAt FROM users WHERE id = ?")
+      .get(userId);
+
+    const tasks = db
+      .prepare(`
+        SELECT
+          id,
+          title,
+          category,
+          priority,
+          start_date as startDate,
+          due_date as dueDate,
+          repeat_type as repeat,
+          done,
+          memo,
+          created_at as createdAt
+        FROM tasks
+        WHERE user_id = ?
+        ORDER BY id ASC
+      `)
+      .all(userId);
+
+    const checks = db
+      .prepare(`
+        SELECT
+          tc.task_id as taskId,
+          tc.check_date as checkDate,
+          tc.checked
+        FROM task_checks tc
+        JOIN tasks t ON tc.task_id = t.id
+        WHERE t.user_id = ?
+        ORDER BY tc.id ASC
+      `)
+      .all(userId);
+
+    const backupData = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      user,
+      tasks,
+      checks
+    };
+
+    const fileName = `todo-backup-${user.username}-${todayStr()}.json`;
+
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.send(JSON.stringify(backupData, null, 2));
+  } catch (error) {
+    console.error("backup error:", error);
+    res.status(500).json({ message: "백업 생성 실패", error: error.message });
+  }
+});
+
+app.post("/api/restore", requireLogin, (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const { backup, mode } = req.body;
+
+    if (!backup || typeof backup !== "object") {
+      return res.status(400).json({ message: "복구 파일 형식이 올바르지 않습니다." });
+    }
+
+    const tasks = Array.isArray(backup.tasks) ? backup.tasks : [];
+    const checks = Array.isArray(backup.checks) ? backup.checks : [];
+    const restoreMode = mode === "replace" ? "replace" : "merge";
+
+    const insertTaskStmt = db.prepare(`
+      INSERT INTO tasks (
+        user_id, title, category, priority,
+        start_date, due_date, repeat_type, done, memo, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const insertCheckStmt = db.prepare(`
+      INSERT INTO task_checks (task_id, check_date, checked)
+      VALUES (?, ?, ?)
+      ON CONFLICT(task_id, check_date)
+      DO UPDATE SET checked = excluded.checked
+    `);
+
+    const deleteChecksStmt = db.prepare(`
+      DELETE FROM task_checks
+      WHERE task_id IN (SELECT id FROM tasks WHERE user_id = ?)
+    `);
+
+    const deleteTasksStmt = db.prepare(`
+      DELETE FROM tasks
+      WHERE user_id = ?
+    `);
+
+    const transaction = db.transaction(() => {
+      if (restoreMode === "replace") {
+        deleteChecksStmt.run(userId);
+        deleteTasksStmt.run(userId);
+      }
+
+      const taskIdMap = new Map();
+
+      for (const task of tasks) {
+        const result = insertTaskStmt.run(
+          userId,
+          task.title || "",
+          task.category || "",
+          task.priority || "mid",
+          task.startDate || "",
+          task.dueDate || "",
+          task.repeat || "",
+          task.done ? 1 : 0,
+          task.memo || "",
+          task.createdAt || new Date().toISOString()
+        );
+
+        taskIdMap.set(task.id, result.lastInsertRowid);
+      }
+
+      for (const check of checks) {
+        const newTaskId = taskIdMap.get(check.taskId);
+        if (!newTaskId) continue;
+
+        insertCheckStmt.run(
+          newTaskId,
+          check.checkDate || todayStr(),
+          check.checked ? 1 : 0
+        );
+      }
+    });
+
+    transaction();
+
+    res.json({
+      ok: true,
+      message: restoreMode === "replace" ? "전체 복구 완료" : "백업 추가 복구 완료"
+    });
+  } catch (error) {
+    console.error("restore error:", error);
+    res.status(500).json({ message: "복구 실패", error: error.message });
+  }
+});
+
 startServer().catch((err) => {
   console.error("서버 시작 실패:", err);
   process.exit(1);

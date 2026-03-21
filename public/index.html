@@ -12,15 +12,16 @@
       <h1>업무 캘린더</h1>
 
       <div class="top-right">
-        <button class="btn-today" onclick="goToday()">오늘</button>
-        <button class="btn-today" id="btn-open-widget" onclick="openWidget()">위젯 열기</button>
-        <button class="btn-today" id="btn-hide-widget" onclick="hideWidget()">위젯 숨기기</button>
-        <button class="btn-today" id="btn-open-desktop-widget" onclick="openDesktopWidget()">앱에서 위젯 열기</button>
-        <button class="btn-today" onclick="copyTodayReport()">업무보고 복사</button>
-        <button class="btn-today" onclick="logout()">로그아웃</button>
-        <span class="top-badge" id="user-name"></span>
-        <span class="top-badge" id="pending-badge">0개 남음</span>
-      </div>
+  <button class="btn-today" onclick="goToday()">오늘</button>
+  <button class="btn-today" onclick="downloadBackup()">백업</button>
+  <button class="btn-today" onclick="openRestorePicker()">복구</button>
+  <button class="btn-today" onclick="copyTodayReport()">업무보고 복사</button>
+  <button class="btn-today" onclick="logout()">로그아웃</button>
+  <span class="top-badge" id="user-name"></span>
+  <span class="top-badge" id="pending-badge">0개 남음</span>
+</div>
+
+<input type="file" id="restore-file-input" accept=".json,application/json" style="display:none" />
     </div>
 
     <div class="layout-top">
