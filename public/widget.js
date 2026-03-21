@@ -1,3 +1,10 @@
+let widgetSettings = {
+  alwaysOnTop: true,
+  opacity: 1,
+  ignoreMouseEvents: false,
+  theme: "yellow"
+};
+
 function getTodayLabel() {
   const d = new Date();
   const y = d.getFullYear();
@@ -16,16 +23,49 @@ function escapeHtml(str) {
     .replaceAll("'", "&#39;");
 }
 
+function applyTheme(theme) {
+  const body = document.getElementById("widget-body");
+  body.classList.remove("theme-yellow", "theme-pink", "theme-mint");
+  body.classList.add(`theme-${theme}`);
+}
+
+function syncControlUI() {
+  const opacityRange = document.getElementById("opacity-range");
+  const themeSelect = document.getElementById("theme-select");
+
+  if (opacityRange) opacityRange.value = String(Math.round((widgetSettings.opacity || 1) * 100));
+  if (themeSelect) themeSelect.value = widgetSettings.theme || "yellow";
+
+  applyTheme(widgetSettings.theme || "yellow");
+}
+
+async function loadInitialSettings() {
+  if (!window.widgetWindowAPI?.getSettings) return;
+  const settings = await window.widgetWindowAPI.getSettings();
+  widgetSettings = { ...widgetSettings, ...settings };
+  syncControlUI();
+}
+
 function minimizeWidget() {
-  if (window.widgetWindowAPI?.minimize) {
-    window.widgetWindowAPI.minimize();
-  }
+  window.widgetWindowAPI?.minimize?.();
 }
 
 function closeWidget() {
-  if (window.widgetWindowAPI?.close) {
-    window.widgetWindowAPI.close();
-  }
+  window.widgetWindowAPI?.close?.();
+}
+
+function openMainApp() {
+  window.widgetWindowAPI?.showMain?.();
+}
+
+function toggleAlwaysOnTop() {
+  widgetSettings.alwaysOnTop = !widgetSettings.alwaysOnTop;
+  window.widgetWindowAPI?.setAlwaysOnTop?.(widgetSettings.alwaysOnTop);
+}
+
+function toggleIgnoreMouse() {
+  widgetSettings.ignoreMouseEvents = !widgetSettings.ignoreMouseEvents;
+  window.widgetWindowAPI?.setIgnoreMouse?.(widgetSettings.ignoreMouseEvents);
 }
 
 async function loadWidget() {
@@ -119,5 +159,24 @@ async function toggleWidgetTask(id, checked) {
   }
 }
 
+document.getElementById("opacity-range")?.addEventListener("input", (e) => {
+  const value = Number(e.target.value) / 100;
+  widgetSettings.opacity = value;
+  window.widgetWindowAPI?.setOpacity?.(value);
+});
+
+document.getElementById("theme-select")?.addEventListener("change", (e) => {
+  const theme = e.target.value;
+  widgetSettings.theme = theme;
+  applyTheme(theme);
+  window.widgetWindowAPI?.setTheme?.(theme);
+});
+
+window.widgetWindowAPI?.onApplySettings?.((settings) => {
+  widgetSettings = { ...widgetSettings, ...settings };
+  syncControlUI();
+});
+
+loadInitialSettings();
 loadWidget();
 setInterval(loadWidget, 30000);

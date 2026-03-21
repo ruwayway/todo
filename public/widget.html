@@ -6,7 +6,7 @@
   <title>오늘의 업무 위젯</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
-<body class="widget-body postit-bg">
+<body class="widget-body postit-bg theme-yellow" id="widget-body">
   <div class="sticky-shell">
     <div class="sticky-dragbar">
       <div class="sticky-dots">
@@ -15,8 +15,11 @@
 
       <div class="sticky-actions">
         <button class="sticky-mini-btn" onclick="loadWidget()" title="새로고침">↻</button>
+        <button class="sticky-mini-btn" onclick="openMainApp()" title="메인 열기">□</button>
+        <button class="sticky-mini-btn" onclick="toggleAlwaysOnTop()" title="항상 위">📌</button>
+        <button class="sticky-mini-btn" onclick="toggleIgnoreMouse()" title="클릭 무시">🖱</button>
         <button class="sticky-mini-btn" onclick="minimizeWidget()" title="최소화">—</button>
-        <button class="sticky-mini-btn close-btn" onclick="closeWidget()" title="닫기">×</button>
+        <button class="sticky-mini-btn close-btn" onclick="closeWidget()" title="숨기기">×</button>
       </div>
     </div>
 
@@ -48,6 +51,22 @@
       <div class="postit-section">
         <div class="postit-section-title">완료한 일</div>
         <div id="widget-done-list" class="postit-list"></div>
+      </div>
+
+      <div class="widget-control-box">
+        <div class="widget-control-row">
+          <label>투명도</label>
+          <input type="range" id="opacity-range" min="50" max="100" step="10" value="100" />
+        </div>
+
+        <div class="widget-control-row">
+          <label>테마</label>
+          <select id="theme-select">
+            <option value="yellow">노랑</option>
+            <option value="pink">핑크</option>
+            <option value="mint">민트</option>
+          </select>
+        </div>
       </div>
     </div>
   </div>
