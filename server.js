@@ -2,16 +2,16 @@ const express = require("express");
 const session = require("express-session");
 const bcrypt = require("bcrypt");
 const path = require("path");
-const db = require("./db");
 const { createClient } = require("redis");
 const { RedisStore } = require("connect-redis");
+const db = require("./db");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.set("trust proxy", 1);
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
 function todayStr() {
@@ -44,27 +44,6 @@ function taskAppearsOn(t, ds) {
   return (t.createdAt || "").slice(0, 10) === ds;
 }
 
-function buildDateChecks(userId) {
-  const checks = db
-    .prepare(
-      `
-      SELECT tc.task_id, tc.check_date, tc.checked
-      FROM task_checks tc
-      JOIN tasks t ON tc.task_id = t.id
-      WHERE t.user_id = ?
-      `
-    )
-    .all(userId);
-
-  const dateChecks = {};
-  for (const c of checks) {
-    if (c.checked) {
-      dateChecks[`${c.task_id}_${c.check_date}`] = true;
-    }
-  }
-  return dateChecks;
-}
-
 function isDoneOn(t, ds, dateChecks) {
   if (t.repeat || (t.startDate && t.dueDate && t.startDate !== t.dueDate)) {
     return !!dateChecks[`${t.id}_${ds}`];
@@ -72,22 +51,39 @@ function isDoneOn(t, ds, dateChecks) {
   return !!t.done;
 }
 
+async function buildDateChecks(userId) {
+  const result = await db.query(
+    `
+    SELECT
+      tc.task_id AS "taskId",
+      tc.check_date::text AS "checkDate",
+      tc.checked
+    FROM task_checks tc
+    JOIN tasks t ON tc.task_id = t.id
+    WHERE t.user_id = $1
+    `,
+    [userId]
+  );
+
+  const dateChecks = {};
+  for (const row of result.rows) {
+    if (row.checked) {
+      dateChecks[`${row.taskId}_${row.checkDate}`] = true;
+    }
+  }
+  return dateChecks;
+}
+
 async function startServer() {
   const redisUrl = process.env.REDIS_URL;
-
   if (!redisUrl) {
-    console.error("REDIS_URL 환경변수가 없습니다.");
-    process.exit(1);
+    throw new Error("REDIS_URL 환경변수가 없습니다.");
   }
 
-  const redisClient = createClient({
-    url: redisUrl
-  });
-
+  const redisClient = createClient({ url: redisUrl });
   redisClient.on("error", (err) => {
     console.error("Redis client error:", err);
   });
-
   await redisClient.connect();
 
   const redisStore = new RedisStore({
@@ -112,6 +108,8 @@ async function startServer() {
     })
   );
 
+  await db.initDb();
+
   /* ---------------- AUTH ---------------- */
 
   app.post("/api/register", async (req, res) => {
@@ -133,22 +131,27 @@ async function startServer() {
         return res.status(400).json({ message: "비밀번호는 4자 이상이어야 합니다." });
       }
 
-      const exists = db.prepare("SELECT id FROM users WHERE username = ?").get(cleanId);
-      if (exists) {
+      const exists = await db.query(
+        `SELECT id FROM users WHERE username = $1`,
+        [cleanId]
+      );
+
+      if (exists.rows.length) {
         return res.status(400).json({ message: "이미 존재하는 아이디입니다." });
       }
 
       const passwordHash = await bcrypt.hash(cleanPw, 10);
 
-      const result = db
-        .prepare("INSERT INTO users (username, password_hash) VALUES (?, ?)")
-        .run(cleanId, passwordHash);
+      const inserted = await db.query(
+        `
+        INSERT INTO users (username, password_hash)
+        VALUES ($1, $2)
+        RETURNING id, username
+        `,
+        [cleanId, passwordHash]
+      );
 
-      req.session.user = {
-        id: result.lastInsertRowid,
-        username: cleanId
-      };
-
+      req.session.user = inserted.rows[0];
       res.json({ ok: true, user: req.session.user });
     } catch (error) {
       console.error("register error:", error);
@@ -160,10 +163,12 @@ async function startServer() {
     try {
       const { username, password } = req.body;
 
-      const user = db
-        .prepare("SELECT * FROM users WHERE username = ?")
-        .get((username || "").trim());
+      const result = await db.query(
+        `SELECT * FROM users WHERE username = $1`,
+        [(username || "").trim()]
+      );
 
+      const user = result.rows[0];
       if (!user) {
         return res.status(400).json({ message: "존재하지 않는 아이디입니다." });
       }
@@ -198,39 +203,41 @@ async function startServer() {
 
   /* ---------------- TASKS ---------------- */
 
-  app.get("/api/tasks", requireLogin, (req, res) => {
+  app.get("/api/tasks", requireLogin, async (req, res) => {
     try {
-      const tasks = db
-        .prepare(
-          `
-          SELECT
-            id,
-            title,
-            category,
-            priority,
-            start_date as startDate,
-            due_date as dueDate,
-            repeat_type as repeat,
-            done,
-            memo,
-            created_at as createdAt
-          FROM tasks
-          WHERE user_id = ?
-          ORDER BY id DESC
-          `
-        )
-        .all(req.session.user.id);
+      const tasksResult = await db.query(
+        `
+        SELECT
+          id,
+          title,
+          category,
+          priority,
+          COALESCE(start_date::text, '') AS "startDate",
+          COALESCE(due_date::text, '') AS "dueDate",
+          COALESCE(repeat_type, '') AS repeat,
+          done,
+          memo,
+          created_at::text AS "createdAt"
+        FROM tasks
+        WHERE user_id = $1
+        ORDER BY id DESC
+        `,
+        [req.session.user.id]
+      );
 
-      const dateChecks = buildDateChecks(req.session.user.id);
+      const dateChecks = await buildDateChecks(req.session.user.id);
 
-      res.json({ tasks, dateChecks });
+      res.json({
+        tasks: tasksResult.rows,
+        dateChecks
+      });
     } catch (error) {
       console.error("get tasks error:", error);
       res.status(500).json({ message: "업무 목록 조회 실패", error: error.message });
     }
   });
 
-  app.post("/api/tasks", requireLogin, (req, res) => {
+  app.post("/api/tasks", requireLogin, async (req, res) => {
     try {
       const { title, category, priority, startDate, dueDate, repeat, memo } = req.body;
 
@@ -238,16 +245,15 @@ async function startServer() {
         return res.status(400).json({ message: "업무명을 입력하세요." });
       }
 
-      const result = db
-        .prepare(
-          `
-          INSERT INTO tasks (
-            user_id, title, category, priority,
-            start_date, due_date, repeat_type, memo, done
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
-          `
-        )
-        .run(
+      const inserted = await db.query(
+        `
+        INSERT INTO tasks (
+          user_id, title, category, priority,
+          start_date, due_date, repeat_type, memo, done
+        ) VALUES ($1, $2, $3, $4, NULLIF($5, '')::date, NULLIF($6, '')::date, $7, $8, FALSE)
+        RETURNING id
+        `,
+        [
           req.session.user.id,
           title.trim(),
           category || "",
@@ -256,37 +262,47 @@ async function startServer() {
           dueDate || "",
           repeat || "",
           memo || ""
-        );
+        ]
+      );
 
-      res.json({ ok: true, id: result.lastInsertRowid });
+      res.json({ ok: true, id: inserted.rows[0].id });
     } catch (error) {
       console.error("create task error:", error);
       res.status(500).json({ message: "업무 추가 실패", error: error.message });
     }
   });
 
-  app.put("/api/tasks/:id", requireLogin, (req, res) => {
+  app.put("/api/tasks/:id", requireLogin, async (req, res) => {
     try {
       const { id } = req.params;
       const { title, category, priority, startDate, dueDate, repeat, memo, done } = req.body;
 
-      db.prepare(
+      await db.query(
         `
         UPDATE tasks
-        SET title = ?, category = ?, priority = ?, start_date = ?, due_date = ?, repeat_type = ?, memo = ?, done = ?
-        WHERE id = ? AND user_id = ?
-        `
-      ).run(
-        title || "",
-        category || "",
-        priority || "mid",
-        startDate || "",
-        dueDate || "",
-        repeat || "",
-        memo || "",
-        done ? 1 : 0,
-        id,
-        req.session.user.id
+        SET
+          title = $1,
+          category = $2,
+          priority = $3,
+          start_date = NULLIF($4, '')::date,
+          due_date = NULLIF($5, '')::date,
+          repeat_type = $6,
+          memo = $7,
+          done = $8
+        WHERE id = $9 AND user_id = $10
+        `,
+        [
+          title || "",
+          category || "",
+          priority || "mid",
+          startDate || "",
+          dueDate || "",
+          repeat || "",
+          memo || "",
+          !!done,
+          Number(id),
+          req.session.user.id
+        ]
       );
 
       res.json({ ok: true });
@@ -296,20 +312,14 @@ async function startServer() {
     }
   });
 
-  app.delete("/api/tasks/:id", requireLogin, (req, res) => {
+  app.delete("/api/tasks/:id", requireLogin, async (req, res) => {
     try {
       const { id } = req.params;
 
-      db.prepare(
-        `
-        DELETE FROM task_checks
-        WHERE task_id IN (
-          SELECT id FROM tasks WHERE id = ? AND user_id = ?
-        )
-        `
-      ).run(id, req.session.user.id);
-
-      db.prepare("DELETE FROM tasks WHERE id = ? AND user_id = ?").run(id, req.session.user.id);
+      await db.query(
+        `DELETE FROM tasks WHERE id = $1 AND user_id = $2`,
+        [Number(id), req.session.user.id]
+      );
 
       res.json({ ok: true });
     } catch (error) {
@@ -318,46 +328,48 @@ async function startServer() {
     }
   });
 
-  app.post("/api/tasks/:id/check", requireLogin, (req, res) => {
+  app.post("/api/tasks/:id/check", requireLogin, async (req, res) => {
     try {
       const { id } = req.params;
       const { date, checked } = req.body;
 
-      const task = db
-        .prepare(
-          `
-          SELECT *
-          FROM tasks
-          WHERE id = ? AND user_id = ?
-          `
-        )
-        .get(id, req.session.user.id);
+      const taskResult = await db.query(
+        `
+        SELECT *
+        FROM tasks
+        WHERE id = $1 AND user_id = $2
+        `,
+        [Number(id), req.session.user.id]
+      );
 
+      const task = taskResult.rows[0];
       if (!task) {
         return res.status(404).json({ message: "업무를 찾을 수 없습니다." });
       }
 
       const isRepeatOrRange =
         !!task.repeat_type ||
-        (task.start_date && task.due_date && task.start_date !== task.due_date);
+        (task.start_date && task.due_date && String(task.start_date) !== String(task.due_date));
 
       if (isRepeatOrRange) {
-        db.prepare(
+        await db.query(
           `
           INSERT INTO task_checks (task_id, check_date, checked)
-          VALUES (?, ?, ?)
+          VALUES ($1, NULLIF($2, '')::date, $3)
           ON CONFLICT(task_id, check_date)
-          DO UPDATE SET checked = excluded.checked
-          `
-        ).run(id, date || todayStr(), checked ? 1 : 0);
+          DO UPDATE SET checked = EXCLUDED.checked
+          `,
+          [Number(id), date || todayStr(), !!checked]
+        );
       } else {
-        db.prepare(
+        await db.query(
           `
           UPDATE tasks
-          SET done = ?
-          WHERE id = ? AND user_id = ?
-          `
-        ).run(checked ? 1 : 0, id, req.session.user.id);
+          SET done = $1
+          WHERE id = $2 AND user_id = $3
+          `,
+          [!!checked, Number(id), req.session.user.id]
+        );
       }
 
       res.json({ ok: true });
@@ -369,32 +381,32 @@ async function startServer() {
 
   /* ---------------- TODAY REPORT ---------------- */
 
-  app.get("/api/today-report", requireLogin, (req, res) => {
+  app.get("/api/today-report", requireLogin, async (req, res) => {
     try {
       const ds = req.query.date || todayStr();
 
-      const tasks = db
-        .prepare(
-          `
-          SELECT
-            id,
-            title,
-            category,
-            priority,
-            start_date as startDate,
-            due_date as dueDate,
-            repeat_type as repeat,
-            done,
-            memo,
-            created_at as createdAt
-          FROM tasks
-          WHERE user_id = ?
-          ORDER BY id DESC
-          `
-        )
-        .all(req.session.user.id);
+      const tasksResult = await db.query(
+        `
+        SELECT
+          id,
+          title,
+          category,
+          priority,
+          COALESCE(start_date::text, '') AS "startDate",
+          COALESCE(due_date::text, '') AS "dueDate",
+          COALESCE(repeat_type, '') AS repeat,
+          done,
+          memo,
+          created_at::text AS "createdAt"
+        FROM tasks
+        WHERE user_id = $1
+        ORDER BY id DESC
+        `,
+        [req.session.user.id]
+      );
 
-      const dateChecks = buildDateChecks(req.session.user.id);
+      const tasks = tasksResult.rows;
+      const dateChecks = await buildDateChecks(req.session.user.id);
 
       const todayTasks = tasks.filter((t) => taskAppearsOn(t, ds));
       const doneList = todayTasks.filter((t) => isDoneOn(t, ds, dateChecks));
@@ -428,6 +440,168 @@ async function startServer() {
     }
   });
 
+  /* ---------------- BACKUP / RESTORE ---------------- */
+
+  app.get("/api/backup", requireLogin, async (req, res) => {
+    try {
+      const userId = req.session.user.id;
+
+      const userResult = await db.query(
+        `
+        SELECT
+          id,
+          username,
+          created_at::text AS "createdAt"
+        FROM users
+        WHERE id = $1
+        `,
+        [userId]
+      );
+
+      const tasksResult = await db.query(
+        `
+        SELECT
+          id,
+          title,
+          category,
+          priority,
+          COALESCE(start_date::text, '') AS "startDate",
+          COALESCE(due_date::text, '') AS "dueDate",
+          COALESCE(repeat_type, '') AS repeat,
+          done,
+          memo,
+          created_at::text AS "createdAt"
+        FROM tasks
+        WHERE user_id = $1
+        ORDER BY id ASC
+        `,
+        [userId]
+      );
+
+      const checksResult = await db.query(
+        `
+        SELECT
+          tc.task_id AS "taskId",
+          tc.check_date::text AS "checkDate",
+          tc.checked
+        FROM task_checks tc
+        JOIN tasks t ON tc.task_id = t.id
+        WHERE t.user_id = $1
+        ORDER BY tc.id ASC
+        `,
+        [userId]
+      );
+
+      const backupData = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        user: userResult.rows[0],
+        tasks: tasksResult.rows,
+        checks: checksResult.rows
+      };
+
+      const fileName = `todo-backup-${backupData.user.username}-${todayStr()}.json`;
+
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+      res.send(JSON.stringify(backupData, null, 2));
+    } catch (error) {
+      console.error("backup error:", error);
+      res.status(500).json({ message: "백업 생성 실패", error: error.message });
+    }
+  });
+
+  app.post("/api/restore", requireLogin, async (req, res) => {
+    const client = await db.pool.connect();
+
+    try {
+      const userId = req.session.user.id;
+      const { backup, mode } = req.body;
+
+      if (!backup || typeof backup !== "object") {
+        client.release();
+        return res.status(400).json({ message: "복구 파일 형식이 올바르지 않습니다." });
+      }
+
+      const tasks = Array.isArray(backup.tasks) ? backup.tasks : [];
+      const checks = Array.isArray(backup.checks) ? backup.checks : [];
+      const restoreMode = mode === "replace" ? "replace" : "merge";
+
+      await client.query("BEGIN");
+
+      if (restoreMode === "replace") {
+        await client.query(
+          `
+          DELETE FROM tasks
+          WHERE user_id = $1
+          `,
+          [userId]
+        );
+      }
+
+      const taskIdMap = new Map();
+
+      for (const task of tasks) {
+        const inserted = await client.query(
+          `
+          INSERT INTO tasks (
+            user_id, title, category, priority,
+            start_date, due_date, repeat_type, done, memo, created_at
+          ) VALUES (
+            $1, $2, $3, $4,
+            NULLIF($5, '')::date,
+            NULLIF($6, '')::date,
+            $7, $8, $9, COALESCE(NULLIF($10, '')::timestamptz, NOW())
+          )
+          RETURNING id
+          `,
+          [
+            userId,
+            task.title || "",
+            task.category || "",
+            task.priority || "mid",
+            task.startDate || "",
+            task.dueDate || "",
+            task.repeat || "",
+            !!task.done,
+            task.memo || "",
+            task.createdAt || ""
+          ]
+        );
+
+        taskIdMap.set(task.id, inserted.rows[0].id);
+      }
+
+      for (const check of checks) {
+        const newTaskId = taskIdMap.get(check.taskId);
+        if (!newTaskId) continue;
+
+        await client.query(
+          `
+          INSERT INTO task_checks (task_id, check_date, checked)
+          VALUES ($1, NULLIF($2, '')::date, $3)
+          ON CONFLICT(task_id, check_date)
+          DO UPDATE SET checked = EXCLUDED.checked
+          `,
+          [newTaskId, check.checkDate || todayStr(), !!check.checked]
+        );
+      }
+
+      await client.query("COMMIT");
+      client.release();
+
+      res.json({
+        ok: true,
+        message: restoreMode === "replace" ? "전체 복구 완료" : "백업 추가 복구 완료"
+      });
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      client.release();
+      console.error("restore error:", error);
+      res.status(500).json({ message: "복구 실패", error: error.message });
+    }
+  });
+
   app.get("/", (req, res) => {
     res.redirect("/login.html");
   });
@@ -436,153 +610,6 @@ async function startServer() {
     console.log(`Server running on port ${PORT}`);
   });
 }
-
-/* ---------------- BACKUP / RESTORE ---------------- */
-
-app.get("/api/backup", requireLogin, (req, res) => {
-  try {
-    const userId = req.session.user.id;
-
-    const user = db
-      .prepare("SELECT id, username, created_at as createdAt FROM users WHERE id = ?")
-      .get(userId);
-
-    const tasks = db
-      .prepare(`
-        SELECT
-          id,
-          title,
-          category,
-          priority,
-          start_date as startDate,
-          due_date as dueDate,
-          repeat_type as repeat,
-          done,
-          memo,
-          created_at as createdAt
-        FROM tasks
-        WHERE user_id = ?
-        ORDER BY id ASC
-      `)
-      .all(userId);
-
-    const checks = db
-      .prepare(`
-        SELECT
-          tc.task_id as taskId,
-          tc.check_date as checkDate,
-          tc.checked
-        FROM task_checks tc
-        JOIN tasks t ON tc.task_id = t.id
-        WHERE t.user_id = ?
-        ORDER BY tc.id ASC
-      `)
-      .all(userId);
-
-    const backupData = {
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      user,
-      tasks,
-      checks
-    };
-
-    const fileName = `todo-backup-${user.username}-${todayStr()}.json`;
-
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
-    res.send(JSON.stringify(backupData, null, 2));
-  } catch (error) {
-    console.error("backup error:", error);
-    res.status(500).json({ message: "백업 생성 실패", error: error.message });
-  }
-});
-
-app.post("/api/restore", requireLogin, (req, res) => {
-  try {
-    const userId = req.session.user.id;
-    const { backup, mode } = req.body;
-
-    if (!backup || typeof backup !== "object") {
-      return res.status(400).json({ message: "복구 파일 형식이 올바르지 않습니다." });
-    }
-
-    const tasks = Array.isArray(backup.tasks) ? backup.tasks : [];
-    const checks = Array.isArray(backup.checks) ? backup.checks : [];
-    const restoreMode = mode === "replace" ? "replace" : "merge";
-
-    const insertTaskStmt = db.prepare(`
-      INSERT INTO tasks (
-        user_id, title, category, priority,
-        start_date, due_date, repeat_type, done, memo, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const insertCheckStmt = db.prepare(`
-      INSERT INTO task_checks (task_id, check_date, checked)
-      VALUES (?, ?, ?)
-      ON CONFLICT(task_id, check_date)
-      DO UPDATE SET checked = excluded.checked
-    `);
-
-    const deleteChecksStmt = db.prepare(`
-      DELETE FROM task_checks
-      WHERE task_id IN (SELECT id FROM tasks WHERE user_id = ?)
-    `);
-
-    const deleteTasksStmt = db.prepare(`
-      DELETE FROM tasks
-      WHERE user_id = ?
-    `);
-
-    const transaction = db.transaction(() => {
-      if (restoreMode === "replace") {
-        deleteChecksStmt.run(userId);
-        deleteTasksStmt.run(userId);
-      }
-
-      const taskIdMap = new Map();
-
-      for (const task of tasks) {
-        const result = insertTaskStmt.run(
-          userId,
-          task.title || "",
-          task.category || "",
-          task.priority || "mid",
-          task.startDate || "",
-          task.dueDate || "",
-          task.repeat || "",
-          task.done ? 1 : 0,
-          task.memo || "",
-          task.createdAt || new Date().toISOString()
-        );
-
-        taskIdMap.set(task.id, result.lastInsertRowid);
-      }
-
-      for (const check of checks) {
-        const newTaskId = taskIdMap.get(check.taskId);
-        if (!newTaskId) continue;
-
-        insertCheckStmt.run(
-          newTaskId,
-          check.checkDate || todayStr(),
-          check.checked ? 1 : 0
-        );
-      }
-    });
-
-    transaction();
-
-    res.json({
-      ok: true,
-      message: restoreMode === "replace" ? "전체 복구 완료" : "백업 추가 복구 완료"
-    });
-  } catch (error) {
-    console.error("restore error:", error);
-    res.status(500).json({ message: "복구 실패", error: error.message });
-  }
-});
 
 startServer().catch((err) => {
   console.error("서버 시작 실패:", err);
