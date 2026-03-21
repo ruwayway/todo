@@ -14,8 +14,10 @@
   "dependencies": {
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.2.0",
+    "connect-redis": "^9.0.0",
     "express": "^5.1.0",
-    "express-session": "^1.18.2"
+    "express-session": "^1.18.2",
+    "redis": "^5.11.0"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
