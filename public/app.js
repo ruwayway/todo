@@ -1,6 +1,6 @@
 const REPEAT_LABEL = {
   daily: "매일",
-  weekday: "평일마다",
+  weekday: "평일",
   weekly: "매주",
   monthly: "매월"
 };
@@ -35,6 +35,19 @@ function fmt(d) {
 
 function isCheckedOn(id, ds) {
   return !!dateChecks[`${id}_${ds}`];
+}
+
+function getRepeatLabel(rep) {
+  return REPEAT_LABEL[rep] || "";
+}
+
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function taskAppearsOn(t, ds) {
@@ -108,12 +121,44 @@ function setupDesktopOnlyButtons() {
   }
 }
 
-function dotClass(t, ds) {
+function getCategoryClass(category) {
+  const map = {
+    "업무": "cat-work",
+    "개발": "cat-dev",
+    "기획": "cat-plan",
+    "미팅": "cat-meeting",
+    "개인": "cat-personal",
+    "썸네일": "cat-thumb",
+    "상세페이지": "cat-detail",
+    "배너": "cat-banner"
+  };
+  return map[category] || "cat-default";
+}
+
+function getRepeatClass(repeat) {
+  const map = {
+    daily: "rep-daily",
+    weekday: "rep-weekday",
+    weekly: "rep-weekly",
+    monthly: "rep-monthly"
+  };
+  return map[repeat] || "rep-default";
+}
+
+function getCalendarChipClass(t, ds) {
   if (isDoneOn(t, ds)) return "dot-done";
-  if (t.repeat) return "dot-repeat";
-  if (t.priority === "high") return "dot-high";
-  if (t.priority === "low") return "dot-low";
-  return "dot-mid";
+
+  if (t.repeat) {
+    return `dot-item ${getRepeatClass(t.repeat)}`;
+  }
+
+  if (t.category) {
+    return `dot-item ${getCategoryClass(t.category)}`;
+  }
+
+  if (t.priority === "high") return "dot-item dot-high";
+  if (t.priority === "low") return "dot-item dot-low";
+  return "dot-item dot-mid";
 }
 
 function renderCalendar() {
@@ -196,10 +241,10 @@ function makeCell(d, ds, other) {
 
   const dt = getTasksForDate(ds);
   dt.slice(0, 3).forEach((t) => {
-    const dot = document.createElement("div");
-    dot.className = "dot-item " + dotClass(t, ds);
-    dot.textContent = t.title;
-    dots.appendChild(dot);
+    const chip = document.createElement("div");
+    chip.className = getCalendarChipClass(t, ds);
+    chip.textContent = t.title;
+    dots.appendChild(chip);
   });
 
   if (dt.length > 3) {
@@ -231,6 +276,16 @@ function selectDate(ds) {
   renderDayPanel();
 }
 
+function renderCategoryTag(category) {
+  if (!category) return "";
+  return `<span class="tag tag-cat ${getCategoryClass(category)}" data-cat="${escapeHtml(category)}">${escapeHtml(category)}</span>`;
+}
+
+function renderRepeatTag(repeat) {
+  if (!repeat) return "";
+  return `<span class="tag tag-rep ${getRepeatClass(repeat)}" data-rep="${escapeHtml(repeat)}">${escapeHtml(getRepeatLabel(repeat))}</span>`;
+}
+
 function renderDayPanel() {
   if (!selectedDate) return;
 
@@ -249,12 +304,12 @@ function renderDayPanel() {
       <div class="task-row ${checked ? "done" : ""}">
         <input type="checkbox" ${checked ? "checked" : ""} onclick="event.stopPropagation();toggleDoneOn(${t.id}, '${selectedDate}')">
         <div class="task-row-body" onclick="openDetail(${t.id})">
-          <div class="task-row-title">${t.title}</div>
+          <div class="task-row-title">${escapeHtml(t.title)}</div>
           <div class="task-row-meta">
-            ${t.category ? `<span class="tag tag-cat">${t.category}</span>` : ""}
-            ${t.repeat ? `<span class="tag tag-rep">${REPEAT_LABEL[t.repeat]}</span>` : ""}
+            ${renderCategoryTag(t.category)}
+            ${renderRepeatTag(t.repeat)}
             ${t.dueDate ? `<span class="tag-date">~${fmt(t.dueDate)}</span>` : ""}
-            ${t.memo ? `<span class="tag tag-cat">메모</span>` : ""}
+            ${t.memo ? `<span class="tag tag-cat cat-default">메모</span>` : ""}
           </div>
         </div>
         <button class="del-btn" onclick="event.stopPropagation();deleteTask(${t.id})">✕</button>
@@ -300,9 +355,9 @@ function renderUrgent() {
       <div class="urgent-item">
         <div class="urgency-bar ${isToday ? "ub-today" : "ub-tomorrow"}"></div>
         <div class="urgent-body" onclick="openDetail(${t.id})">
-          <div class="urgent-title">${t.title}</div>
+          <div class="urgent-title">${escapeHtml(t.title)}</div>
           <div class="urgent-meta">
-            ${t.category ? `<span class="tag tag-cat">${t.category}</span>` : ""}
+            ${renderCategoryTag(t.category)}
             <span class="${isToday ? "due-today" : "due-tomorrow"}">${isToday ? "오늘 마감" : "내일 마감"}</span>
           </div>
         </div>
@@ -542,7 +597,7 @@ async function renderTodayReport() {
       <h4>완료한 일 (${report.done})</h4>
       ${
         report.doneList.length
-          ? report.doneList.map((t) => `<div class="report-li">✅ ${t.title}</div>`).join("")
+          ? report.doneList.map((t) => `<div class="report-li">✅ ${escapeHtml(t.title)}</div>`).join("")
           : `<div class="report-li">완료한 업무 없음</div>`
       }
     </div>
@@ -550,7 +605,7 @@ async function renderTodayReport() {
       <h4>남은 일 (${report.pending})</h4>
       ${
         report.pendingList.length
-          ? report.pendingList.map((t) => `<div class="report-li">🕒 ${t.title}</div>`).join("")
+          ? report.pendingList.map((t) => `<div class="report-li">🕒 ${escapeHtml(t.title)}</div>`).join("")
           : `<div class="report-li">남은 업무 없음</div>`
       }
     </div>

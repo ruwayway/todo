@@ -833,3 +833,179 @@ body{
 #day-task-list{
   scrollbar-width:thin;
 }
+
+/* =========================
+   카테고리 색상
+========================= */
+
+.tag-cat[data-cat="업무"]{
+  background:#eaf2ff;
+  color:#4e8df5;
+}
+
+.tag-cat[data-cat="개발"]{
+  background:#e4f7f0;
+  color:#1f9d73;
+}
+
+.tag-cat[data-cat="기획"]{
+  background:#f2eaff;
+  color:#7a4ef5;
+}
+
+.tag-cat[data-cat="미팅"]{
+  background:#fff4d9;
+  color:#b6823a;
+}
+
+.tag-cat[data-cat="개인"]{
+  background:#f3f2ef;
+  color:#7b776f;
+}
+
+.tag-cat[data-cat="썸네일"]{
+  background:#ffeaf2;
+  color:#d94e8f;
+}
+
+.tag-cat[data-cat="상세페이지"]{
+  background:#eaf7ff;
+  color:#3a8bb6;
+}
+
+.tag-cat[data-cat="배너"]{
+  background:#fff0e6;
+  color:#d66a3a;
+}
+
+/* =========================
+   반복 색상
+========================= */
+
+.tag-rep[data-rep="daily"]{
+  background:#e6fff4;
+  color:#00a86b;
+}
+
+.tag-rep[data-rep="weekday"]{
+  background:#eaf7ff;
+  color:#3a8bb6;
+}
+
+.tag-rep[data-rep="weekly"]{
+  background:#fff4d9;
+  color:#b6823a;
+}
+
+.tag-rep[data-rep="monthly"]{
+  background:#f3eaff;
+  color:#7a4ef5;
+}
+
+/* 카테고리 공통 색 */
+.cat-default{
+  background:#f3f2ef !important;
+  color:#7b776f !important;
+}
+
+.cat-work{
+  background:#eaf2ff !important;
+  color:#4e8df5 !important;
+}
+
+.cat-dev{
+  background:#e4f7f0 !important;
+  color:#1f9d73 !important;
+}
+
+.cat-plan{
+  background:#f2eaff !important;
+  color:#7a4ef5 !important;
+}
+
+.cat-meeting{
+  background:#fff4d9 !important;
+  color:#b6823a !important;
+}
+
+.cat-personal{
+  background:#f3f2ef !important;
+  color:#7b776f !important;
+}
+
+.cat-thumb{
+  background:#ffeaf2 !important;
+  color:#d94e8f !important;
+}
+
+.cat-detail{
+  background:#eaf7ff !important;
+  color:#3a8bb6 !important;
+}
+
+.cat-banner{
+  background:#fff0e6 !important;
+  color:#d66a3a !important;
+}
+
+/* 반복 공통 색 */
+.rep-default{
+  background:#eef3ff !important;
+  color:#6486c4 !important;
+}
+
+.rep-daily{
+  background:#e6fff4 !important;
+  color:#00a86b !important;
+}
+
+.rep-weekday{
+  background:#eaf7ff !important;
+  color:#3a8bb6 !important;
+}
+
+.rep-weekly{
+  background:#fff4d9 !important;
+  color:#b6823a !important;
+}
+
+.rep-monthly{
+  background:#f3eaff !important;
+  color:#7a4ef5 !important;
+}
+
+/* 캘린더 칩 보정 */
+.day-dots .dot-item{
+  min-height:20px;
+  display:flex;
+  align-items:center;
+  padding:0 7px;
+  border-radius:7px;
+  font-size:10px;
+  font-weight:700;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* 기존 우선순위 색 */
+.dot-high{
+  background:#fde9e9 !important;
+  color:#d65a5a !important;
+}
+
+.dot-mid{
+  background:#f8ecd8 !important;
+  color:#b6823a !important;
+}
+
+.dot-low{
+  background:#dff6ee !important;
+  color:#1f9d73 !important;
+}
+
+.dot-done{
+  background:#f1f1ef !important;
+  color:#a5a39c !important;
+  text-decoration:line-through !important;
+}
